@@ -13,9 +13,21 @@
 
 ## 核心文件
 
+- `plugin_main.py`
+- `plugin_config.example.json`
 - `bridge_sender.py`
 - `SKILL.md`
 - `references/implementation.md`
+
+## 当前状态
+
+现在已经补出一个 AstrBot 插件版雏形。
+
+它提供一个最小命令
+
+- `桥接发送 <本地文件路径>`
+
+用于把本地媒体桥接成 NapCat 更容易成功的 `video/file` 发送。
 
 ## 核心流程
 

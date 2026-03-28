@@ -1,0 +1,4 @@
+{
+  "static_dir": "/www/wwwroot/openclaw-xhs-video",
+  "static_base_url": "http://192.168.108.128:8089/xhs-video"
+}
