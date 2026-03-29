@@ -67,9 +67,16 @@ pip install -r requirements.txt
 
 如果你的环境里没有 `ffmpeg`，也要另外装好。
 
-### 3. 准备静态文件目录
+### 3. 准备静态文件目录和 Web 服务映射
 
-现在插件安装后可以直接先做半自动初始化。
+这一步的目标很简单。
+
+就是让插件写入的 `static_dir`，能被 Web 服务映射成一个稳定的 HTTP 地址。
+这样 NapCat 才能从这个地址拉到视频文件。
+
+整个流程可以按下面做。
+
+#### 第一步 让插件先把目录准备出来
 
 重载插件后，直接给 bot 发送一条消息
 
@@ -95,11 +102,94 @@ pip install -r requirements.txt
 
 这同样是插件命令消息。
 
-常见做法还是
+#### 第二步 确认插件配置里的两个关键值
 
-- Nginx 暴露一个目录
-- 插件把下载好的文件复制进去
-- NapCat 发送这个文件对应的 HTTP 地址
+最少要确认这两个值是对应的
+
+- `static_dir` 例如 `/www/wwwroot/openclaw-xhs-video`
+- `static_base_url` 例如 `http://192.168.108.128:8089/xhs-video`
+
+它们的关系要一一对应。
+
+比如说
+
+- 插件把文件写到 `/www/wwwroot/openclaw-xhs-video/test.mp4`
+- Web 服务就要能通过 `http://192.168.108.128:8089/xhs-video/test.mp4` 访问到它
+
+#### 第三步 在宿主机上配置 Nginx 映射
+
+这一段不是发给 bot 的。
+这一步要在服务器上操作。
+
+可以新建一个 Nginx 配置文件。
+例如
+
+```text
+/www/server/panel/vhost/nginx/openclaw_xhs_static.conf
+```
+
+内容可以用下面这份
+
+```nginx
+server {
+    listen 8089;
+    server_name _;
+    autoindex off;
+
+    location /xhs-video/ {
+        alias /www/wwwroot/openclaw-xhs-video/;
+        add_header Cache-Control no-store;
+        types { video/mp4 mp4; application/octet-stream bin; }
+        default_type application/octet-stream;
+    }
+}
+```
+
+如果你配置里的 `static_dir` 不是 `/www/wwwroot/openclaw-xhs-video`，这里的 `alias` 也要一起改。
+
+如果你配置里的 `static_base_url` 路径不是 `/xhs-video`，这里的 `location` 也要一起改。
+
+#### 第四步 重载 Nginx
+
+保存配置后，重载 Nginx 让映射生效。
+
+常见做法是
+
+```bash
+nginx -s reload
+```
+
+或者用你当前面板自己的重载方式。
+
+#### 第五步 手动访问一个测试文件
+
+最稳的验证方式是，先往 `static_dir` 里放一个测试文件，然后直接在浏览器里访问它。
+
+比如
+
+```text
+/www/wwwroot/openclaw-xhs-video/test.mp4
+```
+
+然后访问
+
+```text
+http://192.168.108.128:8089/xhs-video/test.mp4
+```
+
+如果浏览器能打开或开始下载，说明映射通了。
+
+#### 第六步 再让 bot 处理真实链接
+
+等 Web 映射确认没问题后，再把视频链接发给 bot。
+
+这时候完整链路才是通的
+
+- 插件下载文件
+- 插件把文件复制到 `static_dir`
+- NapCat 通过 `static_base_url` 对应的 HTTP 地址发视频
+
+如果这里没配通，就会出现文件明明下载了，但 QQ 侧还是发不出去的情况。
 
 ### 4. 配置插件
 
