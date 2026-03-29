@@ -46,7 +46,11 @@ class NapCatMediaBridgePlugin(Star):
         self.config = config or {}
         self.download_dir = Path(self.config.get("download_dir", "/tmp/astrbot-napcat-media-bridge"))
         self.download_dir.mkdir(parents=True, exist_ok=True)
+        self.static_dir = Path(self.config.get("static_dir", "/www/wwwroot/openclaw-xhs-video"))
+        self.static_base_url = self.config.get("static_base_url", "http://127.0.0.1:8089/xhs-video")
+        self.copy_mode = self.config.get("copy_mode", "copy")
         self.enable_auto_detect = bool(self.config.get("enable_auto_detect", True))
+        self.auto_init_static_dir = bool(self.config.get("auto_init_static_dir", True))
         self.ua = self.config.get(
             "user_agent",
             "Mozilla/5.0 (iPhone; CPU iPhone OS 18_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Mobile/15E148 Safari/604.1",
@@ -58,6 +62,67 @@ class NapCatMediaBridgePlugin(Star):
         self.ios_headers = {"User-Agent": self.ua, "Referer": "https://www.douyin.com/"}
         self.android_headers = {"User-Agent": self.android_ua, "Referer": "https://www.douyin.com/"}
         self._cookie_header = ""
+        if self.auto_init_static_dir:
+            self.ensure_static_dir()
+
+    def ensure_static_dir(self) -> tuple[bool, str]:
+        try:
+            self.static_dir.mkdir(parents=True, exist_ok=True)
+            return True, f"静态目录已就绪: {self.static_dir}"
+        except Exception as e:
+            logger.error(f"[napcat-media-bridge] ensure static dir failed: {e}")
+            return False, f"静态目录创建失败: {e}"
+
+    def build_nginx_config_example(self) -> str:
+        base_path = self.static_base_url.rstrip("/")
+        route = "/" + base_path.split("//", 1)[-1].split("/", 1)[-1] if "/" in base_path.split("//", 1)[-1] else "/xhs-video"
+        if not route.endswith("/"):
+            route = route + "/"
+        return (
+            "server {\n"
+            "    listen 8089;\n"
+            "    server_name _;\n"
+            "    autoindex off;\n\n"
+            f"    location {route} {{\n"
+            f"        alias {self.static_dir.as_posix().rstrip('/')}/;\n"
+            "        add_header Cache-Control no-store;\n"
+            "        types { video/mp4 mp4; application/octet-stream bin; }\n"
+            "        default_type application/octet-stream;\n"
+            "    }\n"
+            "}\n"
+        )
+
+    def get_init_summary(self) -> str:
+        ok, msg = self.ensure_static_dir()
+        lines = [msg]
+        lines.append(f"static_base_url: {self.static_base_url}")
+        lines.append(f"copy_mode: {self.copy_mode}")
+        lines.append(f"download_dir: {self.download_dir}")
+        if ok:
+            lines.append("如果静态 URL 还没通，请把下面这段 Nginx 配置加上")
+            lines.append(self.build_nginx_config_example())
+        return "\n".join(lines)
+
+    @filter.command("初始化静态目录", alias={"init_static", "初始化桥接"})
+    async def init_static_cmd(self, event: AstrMessageEvent):
+        await event.send(event.plain_result(self.get_init_summary()))
+
+    @filter.command("检查桥接配置", alias={"check_bridge", "桥接自检"})
+    async def check_bridge_cmd(self, event: AstrMessageEvent):
+        static_exists = self.static_dir.exists()
+        static_writable = self.static_dir.exists() and self.static_dir.is_dir()
+        lines = [
+            f"static_dir: {self.static_dir}",
+            f"static_dir_exists: {static_exists}",
+            f"static_dir_is_dir: {static_writable}",
+            f"static_base_url: {self.static_base_url}",
+            f"download_dir: {self.download_dir}",
+            f"copy_mode: {self.copy_mode}",
+            f"enable_auto_detect: {self.enable_auto_detect}",
+        ]
+        if not static_exists:
+            lines.append("静态目录还不存在，可以执行 初始化静态目录")
+        await event.send(event.plain_result("\n".join(lines)))
 
     @filter.event_message_type(filter.EventMessageType.ALL)
     async def on_message(self, event: AstrMessageEvent):
@@ -82,9 +147,9 @@ class NapCatMediaBridgePlugin(Star):
             await send_media_via_napcat(
                 event=event,
                 local_path=str(file_path),
-                static_dir=self.config.get("static_dir", "/www/wwwroot/openclaw-xhs-video"),
-                static_base_url=self.config.get("static_base_url", "http://127.0.0.1:8089/xhs-video"),
-                copy_mode=self.config.get("copy_mode", "copy"),
+                static_dir=str(self.static_dir),
+                static_base_url=self.static_base_url,
+                copy_mode=self.copy_mode,
             )
             logger.info(f"[napcat-media-bridge] send finished: {file_path}")
         except Exception as e:

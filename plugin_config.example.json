@@ -1,4 +1,8 @@
 {
+  "download_dir": "/tmp/astrbot-napcat-media-bridge",
   "static_dir": "/www/wwwroot/openclaw-xhs-video",
-  "static_base_url": "http://192.168.108.128:8089/xhs-video"
+  "static_base_url": "http://192.168.108.128:8089/xhs-video",
+  "copy_mode": "copy",
+  "enable_auto_detect": true,
+  "auto_init_static_dir": true
 }
