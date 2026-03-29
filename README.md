@@ -260,8 +260,6 @@ B 站这块额外做了几件事。
 
 ## 致谢
 
-这个仓库是在一堆现成项目和实际环境上边修边打磨出来的。
-
 特别感谢这些项目和参考来源。
 
 - `AstrBot` https://github.com/AstrBotDevs/AstrBot
