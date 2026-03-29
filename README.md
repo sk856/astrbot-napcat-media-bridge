@@ -268,6 +268,5 @@ B 站这块额外做了几件事。
 - `NapCatQQ` https://github.com/NapNeko/NapCatQQ
 - `yt-dlp` https://github.com/yt-dlp/yt-dlp
 - `aiohttp` https://github.com/aio-libs/aiohttp
-- `chatanywhere/GPT_API_free` https://github.com/chatanywhere/GPT_API_free
 
 如果它正好也帮你省掉了一堆折腾，那就值了。
