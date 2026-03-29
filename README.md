@@ -53,7 +53,19 @@ astrbot_plugin_napcat_media_bridge
 
 ### 2. 安装依赖
 
-按 AstrBot 插件加载方式安装 `requirements.txt` 里的依赖。
+先安装插件依赖。
+
+```bash
+pip install -r requirements.txt
+```
+
+当前依赖包括
+
+- `aiohttp`
+- `msgspec`
+- `yt-dlp`
+
+如果你的环境里没有 `ffmpeg`，也要另外装好。
 
 ### 3. 准备静态文件目录
 
