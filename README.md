@@ -7,21 +7,24 @@
 
 </div>
 
-## 用途
+## 是什么
 
-把聊天里的分享链接识别出来。
-下载媒体文件。
-把文件放到静态目录。
-通过 HTTP 地址发给 NapCat。
+这是一个给 AstrBot 用的媒体桥接插件。
 
-## 功能
+作用只有一件事。
+把聊天里的分享链接下载成文件。
+再把文件转换成稳定的 HTTP 地址。
+最后通过 NapCat 原生消息发出去。
 
-- 自动识别常见视频链接
-- 自动下载媒体文件
-- 通过 NapCat 原生 `video/file` 发送
-- 支持静态目录复制和复用
-- 支持 B 站短链和 `BV` 链接处理
-- 对常见失败场景返回可读错误
+## 解决什么问题
+
+适合下面这些情况。
+
+- AstrBot 能下载文件，但 QQ 发视频不稳定
+- 本地绝对路径发不出去
+- `file://` 地址经常失败
+- 临时文件地址不稳定
+- 想把 下载 和 发送 串成自动流程
 
 ## 支持平台
 
@@ -38,9 +41,7 @@
 
 ## 安装
 
-### 1. 放置插件
-
-把仓库放到 AstrBot 插件目录。
+### 1. 放到插件目录
 
 推荐目录名
 
@@ -54,13 +55,47 @@ astrbot_plugin_napcat_media_bridge
 pip install -r requirements.txt
 ```
 
-还需要系统已安装 `ffmpeg`。
+需要系统已安装 `ffmpeg`。
 
 ### 3. 配置插件
 
 参考 `plugin_config.example.json`。
 
-常用配置项
+默认配置下，插件启动时会自动
+
+- 创建静态目录
+- 写入 Nginx 配置
+- 重载 Nginx
+
+### 4. 重载 AstrBot 插件
+
+重载后即可生效。
+
+### 5. 检查状态
+
+给 bot 发送
+
+```text
+检查桥接配置
+```
+
+如果要重新初始化，发送
+
+```text
+初始化静态目录
+```
+
+这两个都是插件命令。
+通常不需要加 `/`。
+
+### 6. 直接使用
+
+把支持的平台链接发给 bot。
+插件会自动处理。
+
+## 配置
+
+### 最常用配置
 
 - `download_dir`
 - `static_dir`
@@ -72,49 +107,17 @@ pip install -r requirements.txt
 - `nginx_conf_path`
 - `nginx_reload_command`
 
-默认情况下，插件启动时会自动
+### 配置说明
 
-- 创建 `static_dir`
-- 写入 `nginx_conf_path`
-- 执行 `nginx_reload_command`
+#### `download_dir`
 
-### 4. 重载插件
+下载临时目录。
 
-重载 AstrBot 插件。
-
-### 5. 检查结果
-
-给 bot 发送
-
-```text
-检查桥接配置
-```
-
-如果需要手动重跑初始化，发送
-
-```text
-初始化静态目录
-```
-
-这两个都是发给 bot 的插件命令。
-通常不需要加 `/`。
-
-### 6. 开始使用
-
-把支持的平台链接直接发给 bot。
-插件会自动下载并发送。
-
-## 配置说明
-
-### `download_dir`
-
-下载文件的临时目录。
-
-### `static_dir`
+#### `static_dir`
 
 静态文件目录。
 
-### `static_base_url`
+#### `static_base_url`
 
 静态目录对应的访问地址。
 
@@ -125,28 +128,28 @@ http://127.0.0.1:8089/xhs-video
 ```
 
 如果 NapCat 和 Web 服务不在同一台机器上，不要用 `localhost`。
-改成局域网 IP、容器可达地址或域名。
+请改成局域网 IP、容器可达地址或域名。
 
-### `copy_mode`
+#### `copy_mode`
 
-发送前的文件处理方式。
+发送前文件处理方式。
 
 - `copy` 复制到静态目录后发送
 - `reuse` 文件已在静态目录时直接复用
 
-### `auto_init_static_dir`
+#### `auto_init_static_dir`
 
 启动时自动创建 `static_dir`。
 
-### `auto_init_web_server`
+#### `auto_init_web_server`
 
 启动时自动写入 Web 静态映射配置。
 
-### `auto_reload_nginx`
+#### `auto_reload_nginx`
 
-启动时自动执行 Nginx 重载。
+启动时自动重载 Nginx。
 
-### `nginx_conf_path`
+#### `nginx_conf_path`
 
 自动写入的 Nginx 配置路径。
 
@@ -156,7 +159,7 @@ http://127.0.0.1:8089/xhs-video
 /www/server/panel/vhost/nginx/openclaw_xhs_static.conf
 ```
 
-### `nginx_reload_command`
+#### `nginx_reload_command`
 
 自动重载 Nginx 使用的命令。
 
@@ -167,9 +170,6 @@ nginx -s reload
 ```
 
 ## 默认生成的 Nginx 配置
-
-插件会按配置生成静态映射。
-默认效果如下
 
 ```nginx
 server {
@@ -186,12 +186,31 @@ server {
 }
 ```
 
-## 管理命令
+## 命令
 
-- `初始化静态目录`
-- `检查桥接配置`
+### `初始化静态目录`
 
-## 工作原理
+执行一次完整初始化。
+
+包括
+
+- 创建静态目录
+- 写入 Nginx 配置
+- 重载 Nginx
+- 回显当前配置
+
+### `检查桥接配置`
+
+查看当前桥接状态。
+
+包括
+
+- 静态目录是否存在
+- Nginx 配置是否已写入
+- 当前访问地址
+- 当前重载命令
+
+## 工作流程
 
 1. AstrBot 收到消息
 2. 插件提取链接
@@ -208,23 +227,17 @@ server {
 - `references/implementation.md`
 - `SKILL.md`
 
-## 注意事项
-
-- `static_base_url` 必须能实际访问
-- 某些平台可能需要有效 Cookie
-- `yt-dlp` 和平台策略变化会影响下载成功率
-- 大文件发送会受 QQ 侧限制影响
-
 ## 排障
 
-优先检查
+优先检查下面几项。
 
 - `static_dir` 是否存在
 - `nginx_conf_path` 是否已写入
 - Nginx 是否重载成功
-- `static_base_url` 是否能访问到测试文件
+- `static_base_url` 是否能访问测试文件
 - AstrBot 是否有写权限
 - 目标平台是否需要 Cookie
+- `yt-dlp` 是否过旧
 
 ## 致谢
 
