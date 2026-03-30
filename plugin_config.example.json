@@ -6,5 +6,7 @@
   "enable_auto_detect": true,
   "auto_init_static_dir": true,
   "auto_init_web_server": true,
-  "nginx_conf_path": "/www/server/panel/vhost/nginx/openclaw_xhs_static.conf"
+  "auto_reload_nginx": true,
+  "nginx_conf_path": "/www/server/panel/vhost/nginx/openclaw_xhs_static.conf",
+  "nginx_reload_command": "nginx -s reload"
 }

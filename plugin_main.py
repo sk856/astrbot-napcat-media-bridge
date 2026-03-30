@@ -1,6 +1,7 @@
 import asyncio
 import json
 import re
+import subprocess
 from pathlib import Path
 
 import aiohttp
@@ -52,12 +53,14 @@ class NapCatMediaBridgePlugin(Star):
         self.enable_auto_detect = bool(self.config.get("enable_auto_detect", True))
         self.auto_init_static_dir = bool(self.config.get("auto_init_static_dir", True))
         self.auto_init_web_server = bool(self.config.get("auto_init_web_server", True))
+        self.auto_reload_nginx = bool(self.config.get("auto_reload_nginx", True))
         self.nginx_conf_path = Path(
             self.config.get(
                 "nginx_conf_path",
                 "/www/server/panel/vhost/nginx/openclaw_xhs_static.conf",
             )
         )
+        self.nginx_reload_command = self.config.get("nginx_reload_command", "nginx -s reload")
         self.ua = self.config.get(
             "user_agent",
             "Mozilla/5.0 (iPhone; CPU iPhone OS 18_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Mobile/15E148 Safari/604.1",
@@ -73,6 +76,8 @@ class NapCatMediaBridgePlugin(Star):
             self.ensure_static_dir()
         if self.auto_init_web_server:
             self.ensure_web_server_config()
+            if self.auto_reload_nginx:
+                self.reload_nginx()
 
     def ensure_static_dir(self) -> tuple[bool, str]:
         try:
@@ -90,6 +95,23 @@ class NapCatMediaBridgePlugin(Star):
         except Exception as e:
             logger.error(f"[napcat-media-bridge] ensure web server config failed: {e}")
             return False, f"Web 映射配置写入失败: {e}"
+
+    def reload_nginx(self) -> tuple[bool, str]:
+        try:
+            proc = subprocess.run(
+                self.nginx_reload_command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=20,
+            )
+            if proc.returncode == 0:
+                return True, "Nginx 已重载"
+            err = (proc.stderr or proc.stdout or "").strip()
+            return False, f"Nginx 重载失败: {err or '未知错误'}"
+        except Exception as e:
+            logger.error(f"[napcat-media-bridge] reload nginx failed: {e}")
+            return False, f"Nginx 重载失败: {e}"
 
     def build_nginx_config_example(self) -> str:
         base_path = self.static_base_url.rstrip("/")
@@ -115,14 +137,18 @@ class NapCatMediaBridgePlugin(Star):
         lines = [msg]
         web_ok, web_msg = self.ensure_web_server_config()
         lines.append(web_msg)
+        reload_ok = False
+        if web_ok and self.auto_reload_nginx:
+            reload_ok, reload_msg = self.reload_nginx()
+            lines.append(reload_msg)
         lines.append(f"static_base_url: {self.static_base_url}")
         lines.append(f"copy_mode: {self.copy_mode}")
         lines.append(f"download_dir: {self.download_dir}")
         lines.append(f"nginx_conf_path: {self.nginx_conf_path}")
-        if ok and web_ok:
-            lines.append("现在已经自动写好静态目录和 Web 映射配置")
-            lines.append("如果你的宿主机还没重载 Nginx，再手动重载一次就能生效")
-        lines.append("当前将写入的 Nginx 配置如下")
+        lines.append(f"nginx_reload_command: {self.nginx_reload_command}")
+        if ok and web_ok and reload_ok:
+            lines.append("初始化完成")
+        lines.append("当前 Nginx 配置如下")
         lines.append(self.build_nginx_config_example())
         return "\n".join(lines)
 
@@ -145,8 +171,10 @@ class NapCatMediaBridgePlugin(Star):
             f"enable_auto_detect: {self.enable_auto_detect}",
             f"auto_init_static_dir: {self.auto_init_static_dir}",
             f"auto_init_web_server: {self.auto_init_web_server}",
+            f"auto_reload_nginx: {self.auto_reload_nginx}",
             f"nginx_conf_path: {self.nginx_conf_path}",
             f"nginx_conf_exists: {nginx_conf_exists}",
+            f"nginx_reload_command: {self.nginx_reload_command}",
         ]
         if not static_exists:
             lines.append("静态目录还不存在，可以执行 初始化静态目录")
