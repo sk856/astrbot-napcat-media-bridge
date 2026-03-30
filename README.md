@@ -109,6 +109,9 @@ pip install -r requirements.txt
 - `static_dir` 例如 `/www/wwwroot/openclaw-xhs-video`
 - `static_base_url` 例如 `http://192.168.108.128:8089/xhs-video`
 
+如果 NapCat 和这个 Web 服务就在同一台机器上，`static_base_url` 也可以写成 `http://127.0.0.1:8089/xhs-video`。
+如果不是同机访问，就不要写 `localhost`。
+
 它们的关系要一一对应。
 
 比如说
@@ -223,7 +226,7 @@ http://192.168.108.128:8089/xhs-video/test.mp4
 
 ### `static_base_url`
 
-静态目录对应的外部访问地址。
+静态目录对应的可访问 HTTP 地址。
 
 例如
 
@@ -231,7 +234,17 @@ http://192.168.108.128:8089/xhs-video/test.mp4
 http://127.0.0.1:8089/xhs-video
 ```
 
-如果发往 QQ 的客户端设备不在本机，通常要改成局域网可访问或公网可访问地址。
+这一项不要只看自己浏览器能不能打开。
+要看真正拉取文件的那一端能不能访问到。
+
+可以这样判断
+
+- 如果 NapCat 和 Web 服务在同一台机器上，通常可以用 `127.0.0.1`
+- 如果 NapCat 在 Docker 里，`127.0.0.1` 往往会指向容器自己，这时通常不能直接用
+- 如果拉取方不在这台宿主机上，就要改成局域网 IP、容器可达地址，或者公网域名
+
+所以 `localhost` 或 `127.0.0.1` 不是一定不能用。
+但只有在拉取方和 Web 服务确实是同机可达时才适合。
 
 ### `copy_mode`
 
