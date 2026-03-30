@@ -69,69 +69,52 @@ pip install -r requirements.txt
 
 ### 3. 准备静态文件目录和 Web 服务映射
 
-这一步的目标很简单。
+现在默认就是保守模式的一键初始化。
 
-就是让插件写入的 `static_dir`，能被 Web 服务映射成一个稳定的 HTTP 地址。
-这样 NapCat 才能从这个地址拉到视频文件。
+重载插件后，插件会自动尝试做两件事
 
-整个流程可以按下面做。
+- 创建 `static_dir`
+- 把 Nginx 静态映射配置写到 `nginx_conf_path`
 
-#### 第一步 让插件先把目录准备出来
+也就是说，大多数情况下你装完插件后，Web 端配置已经被插件提前写好了。
 
-重载插件后，直接给 bot 发送一条消息
+如果你想手动再执行一次，也可以直接给 bot 发送
 
 ```text
 初始化静态目录
 ```
 
-不需要去服务器终端执行。
-这是一条发给 bot 的插件命令消息。
-通常也不需要加 `/`。
-
-它会做这些事
-
-- 自动创建 `static_dir`
-- 回显当前桥接配置
-- 输出一段可直接参考的 Nginx 配置
-
-如果你想先检查当前配置，也可以直接给 bot 发送
+如果只想看当前状态，就发送
 
 ```text
 检查桥接配置
 ```
 
-这同样是插件命令消息。
+这两个都是发给 bot 的插件命令。
+不是终端命令。
+通常也不需要加 `/`。
 
-#### 第二步 确认插件配置里的两个关键值
+#### 默认自动做了什么
 
-最少要确认这两个值是对应的
+插件会尝试保证下面几项就绪
 
-- `static_dir` 例如 `/www/wwwroot/openclaw-xhs-video`
-- `static_base_url` 例如 `http://192.168.108.128:8089/xhs-video`
+- `static_dir` 已创建
+- `nginx_conf_path` 已写入 Nginx 配置文件
+- `static_base_url` 和静态映射路径保持一致
 
-如果 NapCat 和这个 Web 服务就在同一台机器上，`static_base_url` 也可以写成 `http://127.0.0.1:8089/xhs-video`。
-如果不是同机访问，就不要写 `localhost`。
+默认示例是
 
-它们的关系要一一对应。
+- `static_dir` 为 `/www/wwwroot/openclaw-xhs-video`
+- `static_base_url` 为 `http://127.0.0.1:8089/xhs-video`
+- `nginx_conf_path` 为 `/www/server/panel/vhost/nginx/openclaw_xhs_static.conf`
 
-比如说
+如果 NapCat 和这个 Web 服务就在同一台机器上，可以直接用 `127.0.0.1`。
+如果不是同机访问，就把 `static_base_url` 改成局域网 IP、容器可达地址或域名，不要写 `localhost`。
 
-- 插件把文件写到 `/www/wwwroot/openclaw-xhs-video/test.mp4`
-- Web 服务就要能通过 `http://192.168.108.128:8089/xhs-video/test.mp4` 访问到它
+#### 插件自动写入的 Nginx 配置长什么样
 
-#### 第三步 在宿主机上配置 Nginx 映射
-
-这一段不是发给 bot 的。
-这一步要在服务器上操作。
-
-可以新建一个 Nginx 配置文件。
-例如
-
-```text
-/www/server/panel/vhost/nginx/openclaw_xhs_static.conf
-```
-
-内容可以用下面这份
+插件会按你的配置自动生成一份静态映射。
+效果等价于下面这份
 
 ```nginx
 server {
@@ -148,15 +131,12 @@ server {
 }
 ```
 
-如果你配置里的 `static_dir` 不是 `/www/wwwroot/openclaw-xhs-video`，这里的 `alias` 也要一起改。
+如果你改了 `static_dir`、`static_base_url` 或 `nginx_conf_path`，插件写出的内容也会跟着变。
 
-如果你配置里的 `static_base_url` 路径不是 `/xhs-video`，这里的 `location` 也要一起改。
+#### 现在还需要你手动做什么
 
-#### 第四步 重载 Nginx
-
-保存配置后，重载 Nginx 让映射生效。
-
-常见做法是
+保守模式下，插件不会替你自动重载 Nginx。
+所以通常还差最后一步
 
 ```bash
 nginx -s reload
@@ -164,35 +144,35 @@ nginx -s reload
 
 或者用你当前面板自己的重载方式。
 
-#### 第五步 手动访问一个测试文件
+这一步做完，静态映射通常就生效了。
 
-最稳的验证方式是，先往 `static_dir` 里放一个测试文件，然后直接在浏览器里访问它。
+#### 怎么验证已经接近即装即用
+
+最稳的方式是
+
+1. 安装插件并重载
+2. 给 bot 发 `检查桥接配置`
+3. 确认 `static_dir_exists` 和 `nginx_conf_exists` 都是正常的
+4. 在宿主机重载一次 Nginx
+5. 丢一个测试文件到 `static_dir`
+6. 用浏览器访问 `static_base_url/文件名`
 
 比如
 
-```text
-/www/wwwroot/openclaw-xhs-video/test.mp4
-```
+- 文件路径是 `/www/wwwroot/openclaw-xhs-video/test.mp4`
+- 对应访问地址就是 `http://127.0.0.1:8089/xhs-video/test.mp4`
 
-然后访问
+如果浏览器能打开或开始下载，后面把真实视频链接发给 bot 就可以直接走通。
 
-```text
-http://192.168.108.128:8089/xhs-video/test.mp4
-```
+#### 什么时候会失败
 
-如果浏览器能打开或开始下载，说明映射通了。
+最常见就两种情况
 
-#### 第六步 再让 bot 处理真实链接
+- 插件进程对 `nginx_conf_path` 没有写权限
+- 宿主机没有按预期加载这个 Nginx 配置目录
 
-等 Web 映射确认没问题后，再把视频链接发给 bot。
-
-这时候完整链路才是通的
-
-- 插件下载文件
-- 插件把文件复制到 `static_dir`
-- NapCat 通过 `static_base_url` 对应的 HTTP 地址发视频
-
-如果这里没配通，就会出现文件明明下载了，但 QQ 侧还是发不出去的情况。
+如果碰到这种情况，插件至少还是会把目录和配置内容准备好。
+你只需要补宿主机那一步，不用再手抄配置。
 
 ### 4. 配置插件
 
@@ -205,6 +185,8 @@ http://192.168.108.128:8089/xhs-video/test.mp4
 - `copy_mode`
 - `download_dir`
 - `auto_init_static_dir`
+- `auto_init_web_server`
+- `nginx_conf_path`
 
 ### 5. 重载插件
 
@@ -267,8 +249,26 @@ http://127.0.0.1:8089/xhs-video
 
 默认开启。
 
-这能解决目录不存在的问题。
-但 Web 服务映射本身还是需要宿主机完成。
+### `auto_init_web_server`
+
+插件启动时是否自动尝试写入 Web 静态映射配置。
+
+默认开启。
+
+保守模式下，它会把 Nginx 配置写到 `nginx_conf_path`。
+但不会自动替你重载 Nginx。
+
+### `nginx_conf_path`
+
+插件自动写入 Nginx 静态映射配置的目标路径。
+
+默认值是
+
+```text
+/www/server/panel/vhost/nginx/openclaw_xhs_static.conf
+```
+
+如果你的宿主机 Nginx 配置目录不同，这里也要一起改。
 
 ## 支持平台
 

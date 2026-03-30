@@ -51,6 +51,13 @@ class NapCatMediaBridgePlugin(Star):
         self.copy_mode = self.config.get("copy_mode", "copy")
         self.enable_auto_detect = bool(self.config.get("enable_auto_detect", True))
         self.auto_init_static_dir = bool(self.config.get("auto_init_static_dir", True))
+        self.auto_init_web_server = bool(self.config.get("auto_init_web_server", True))
+        self.nginx_conf_path = Path(
+            self.config.get(
+                "nginx_conf_path",
+                "/www/server/panel/vhost/nginx/openclaw_xhs_static.conf",
+            )
+        )
         self.ua = self.config.get(
             "user_agent",
             "Mozilla/5.0 (iPhone; CPU iPhone OS 18_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.3 Mobile/15E148 Safari/604.1",
@@ -64,6 +71,8 @@ class NapCatMediaBridgePlugin(Star):
         self._cookie_header = ""
         if self.auto_init_static_dir:
             self.ensure_static_dir()
+        if self.auto_init_web_server:
+            self.ensure_web_server_config()
 
     def ensure_static_dir(self) -> tuple[bool, str]:
         try:
@@ -72,6 +81,15 @@ class NapCatMediaBridgePlugin(Star):
         except Exception as e:
             logger.error(f"[napcat-media-bridge] ensure static dir failed: {e}")
             return False, f"静态目录创建失败: {e}"
+
+    def ensure_web_server_config(self) -> tuple[bool, str]:
+        try:
+            self.nginx_conf_path.parent.mkdir(parents=True, exist_ok=True)
+            self.nginx_conf_path.write_text(self.build_nginx_config_example(), encoding="utf-8")
+            return True, f"Web 映射配置已写入: {self.nginx_conf_path}"
+        except Exception as e:
+            logger.error(f"[napcat-media-bridge] ensure web server config failed: {e}")
+            return False, f"Web 映射配置写入失败: {e}"
 
     def build_nginx_config_example(self) -> str:
         base_path = self.static_base_url.rstrip("/")
@@ -95,12 +113,17 @@ class NapCatMediaBridgePlugin(Star):
     def get_init_summary(self) -> str:
         ok, msg = self.ensure_static_dir()
         lines = [msg]
+        web_ok, web_msg = self.ensure_web_server_config()
+        lines.append(web_msg)
         lines.append(f"static_base_url: {self.static_base_url}")
         lines.append(f"copy_mode: {self.copy_mode}")
         lines.append(f"download_dir: {self.download_dir}")
-        if ok:
-            lines.append("如果静态 URL 还没通，请把下面这段 Nginx 配置加上")
-            lines.append(self.build_nginx_config_example())
+        lines.append(f"nginx_conf_path: {self.nginx_conf_path}")
+        if ok and web_ok:
+            lines.append("现在已经自动写好静态目录和 Web 映射配置")
+            lines.append("如果你的宿主机还没重载 Nginx，再手动重载一次就能生效")
+        lines.append("当前将写入的 Nginx 配置如下")
+        lines.append(self.build_nginx_config_example())
         return "\n".join(lines)
 
     @filter.command("初始化静态目录", alias={"init_static", "初始化桥接"})
@@ -111,6 +134,7 @@ class NapCatMediaBridgePlugin(Star):
     async def check_bridge_cmd(self, event: AstrMessageEvent):
         static_exists = self.static_dir.exists()
         static_writable = self.static_dir.exists() and self.static_dir.is_dir()
+        nginx_conf_exists = self.nginx_conf_path.exists()
         lines = [
             f"static_dir: {self.static_dir}",
             f"static_dir_exists: {static_exists}",
@@ -119,9 +143,15 @@ class NapCatMediaBridgePlugin(Star):
             f"download_dir: {self.download_dir}",
             f"copy_mode: {self.copy_mode}",
             f"enable_auto_detect: {self.enable_auto_detect}",
+            f"auto_init_static_dir: {self.auto_init_static_dir}",
+            f"auto_init_web_server: {self.auto_init_web_server}",
+            f"nginx_conf_path: {self.nginx_conf_path}",
+            f"nginx_conf_exists: {nginx_conf_exists}",
         ]
         if not static_exists:
             lines.append("静态目录还不存在，可以执行 初始化静态目录")
+        if not nginx_conf_exists:
+            lines.append("Web 映射配置还不存在，可以执行 初始化静态目录")
         await event.send(event.plain_result("\n".join(lines)))
 
     @filter.event_message_type(filter.EventMessageType.ALL)
