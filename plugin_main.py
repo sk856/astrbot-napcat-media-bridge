@@ -253,6 +253,8 @@ class NapCatMediaBridgePlugin(Star):
             return await self.download_douyin(url)
         if any(domain in url for domain in ["bilibili.com", "b23.tv", "bili2233.cn", "bili22.cn", "bili23.cn", "bili33.cn"]):
             return await self.download_bilibili(url)
+        if any(domain in url for domain in ["xiaohongshu.com", "xhslink.com"]):
+            return await self.download_xiaohongshu(url)
         return await self.download_with_ytdlp(url)
 
     async def prepare_url(self, url: str) -> str:
@@ -410,6 +412,44 @@ class NapCatMediaBridgePlugin(Star):
             raise FileNotFoundError(str(path))
         return path
 
+    async def download_xiaohongshu(self, url: str) -> Path:
+        try:
+            return await self.download_with_ytdlp(url)
+        except Exception as first_error:
+            logger.warning(f"[napcat-media-bridge] xiaohongshu yt-dlp failed, fallback to page parse: {first_error}")
+            direct_url, note_id = await self.extract_xiaohongshu_video_url(url)
+            return await self.stream_download(
+                direct_url,
+                self.download_dir / f"xiaohongshu_{note_id}.mp4",
+                referer='https://www.xiaohongshu.com/',
+                user_agent=self.ua,
+            )
+
+    async def extract_xiaohongshu_video_url(self, url: str) -> tuple[str, str]:
+        headers = {
+            'User-Agent': self.ua,
+            'Referer': 'https://www.xiaohongshu.com/',
+            'Accept-Language': 'zh-CN,zh;q=0.9',
+        }
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20)) as session:
+            async with session.get(url, headers=headers, allow_redirects=True, ssl=False) as resp:
+                text = await resp.text()
+                final_url = str(resp.url)
+        note_id = self.extract_xiaohongshu_note_id(final_url) or self.extract_xiaohongshu_note_id(url) or 'unknown'
+        text = text.replace('\\u002F', '/').replace('\\u002f', '/')
+        candidates = re.findall(r'"masterUrl":"(https?://[^\"]+?\.mp4[^\"]*)"', text)
+        if not candidates:
+            candidates = re.findall(r'"backupUrls":\["(https?://[^\"]+?\.mp4[^\"]*)"', text)
+        if not candidates:
+            raise RuntimeError('小红书页面解析到了，但没找到可下载视频直链')
+        return candidates[0], note_id
+
+    def extract_xiaohongshu_note_id(self, url: str) -> str | None:
+        matched = re.search(r'xiaohongshu\.com/(?:discovery/item|explore)/([A-Za-z0-9]+)', url)
+        if matched:
+            return matched.group(1)
+        return None
+
     async def download_douyin(self, url: str) -> Path:
         redirect_url = await self.fetch_redirect_and_cookie(url)
         logger.info(f"[napcat-media-bridge] douyin redirect: {redirect_url}")
@@ -476,8 +516,8 @@ class NapCatMediaBridgePlugin(Star):
                     return first.dynamic_urls[0]
         raise RuntimeError('抖音图文没有可下载视频')
 
-    async def stream_download(self, url: str, target: Path) -> Path:
-        headers = {'User-Agent': self.ua, 'Referer': 'https://www.douyin.com/'}
+    async def stream_download(self, url: str, target: Path, referer: str = 'https://www.douyin.com/', user_agent: str | None = None) -> Path:
+        headers = {'User-Agent': user_agent or self.ua, 'Referer': referer}
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=120)) as session:
             async with session.get(url, headers=headers, allow_redirects=True, ssl=False) as resp:
                 if resp.status >= 400:
